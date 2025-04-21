@@ -1,0 +1,54 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE}
+  server:
+    address: ${SPRING_SERVER_ADDRESS}
+    port: ${SPRING_SERVER_PORT}
+    ssl:
+      key-store: ${SPRING_SSL_KEY_STORE}
+      key-store-password: ${SPRING_SSL_KEY_STORE_PASSWORD}
+      key-store-type: ${SPRING_SSL_KEY_STORE_TYPE}
+      key-alias: ${SPRING_SSL_KEY_ALIAS}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
+    database-platform: ${SPRING_JPA_DATABASE_PLATFORM}
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${OAUTH2_GOOGLE_CLIENT_ID}
+            client-secret: ${OAUTH2_GOOGLE_CLIENT_SECRET}
+            scope: ${OAUTH2_GOOGLE_SCOPE}
+        provider:
+          google:
+            authorization-uri: ${OAUTH2_GOOGLE_AUTHORIZATION_URI}
+            token-uri: ${OAUTH2_GOOGLE_TOKEN_URI}
+            user-info-uri: ${OAUTH2_GOOGLE_USER_INFO_URI}
+            user-name-attribute: ${OAUTH2_GOOGLE_USER_NAME_ATTRIBUTE}
+
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          timeout: 5000
+          connectiontimeout: 5000
+jwt:
+  secret-key: ${JWT_SECRET_KEY}
