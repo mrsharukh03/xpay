@@ -3,6 +3,8 @@ package com.xpay.Services.UserServices;
 import com.xpay.Entitys.User.User;
 import com.xpay.Entitys.User.UserDTO.UserUpdateDTO;
 import com.xpay.Reposititorys.UserRepo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import java.time.LocalDateTime;
 @Service
 public class UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private final UserRepo userRepo;
     @Autowired
     public UserService(UserRepo userRepo) {
@@ -38,6 +41,7 @@ public class UserService {
             userRepo.save(user);
             return new ResponseEntity<>("Update Successfully",HttpStatus.OK);
         }catch (Exception e){
+            log.error("Error updating user Profile {}",e.getMessage());
             return new ResponseEntity<>("Something went wrong",HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

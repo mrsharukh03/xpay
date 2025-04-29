@@ -86,7 +86,7 @@ public class WalletController {
         }
     }
 
-    @PostMapping("/payFor")
+    @PostMapping("/payment")
     @PreAuthorize("hasRole('ROLE_USER')")
     @RateLimit(limit = 2, window = 60)
     public ResponseEntity<?> payFor(@RequestParam Double amount,

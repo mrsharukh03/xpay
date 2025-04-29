@@ -34,15 +34,15 @@ public class AdminController {
 
     @PostMapping("/auth/signup")
     public ResponseEntity<?> signup(@Valid @RequestBody AdminRegDTO adminRegDTO){
-        return adminService.addAdmin(adminRegDTO);
+        return adminService.signup(adminRegDTO);
     }
 
-    @PostMapping("/auth/otp-verify")
+    @PostMapping("/auth/otp/verify")
     public ResponseEntity<?> verifyOTP(@RequestParam String email,String otp){
         return adminService.verifyOTP(email,otp);
     }
 
-    @PostMapping("/auth/resendOTP")
+    @PostMapping("/auth/otp/resend")
     public ResponseEntity<?> resendOTP(@RequestParam String email){
        return adminService.resandOTP(email);
     }
@@ -52,19 +52,19 @@ public class AdminController {
         return adminService.login(loginDTO);
     }
 
-    @PostMapping("/auth/newPassword")
+    @PostMapping("/auth/password/reset")
     public ResponseEntity<?> newPassword(@RequestParam String email,String newPassword,String otp){
         return adminService.newPassword(email,newPassword,otp);
     }
 
-    @GetMapping("/pending")
+    @GetMapping("/client/pending")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @RateLimit(limit = 5, window = 60)
     public ResponseEntity<List<ClientProfileDTO>> pendingClient(){
         return adminService.pendingClients();
     }
 
-    @PatchMapping("/approve-client")
+    @PatchMapping("/client/approve")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @RateLimit(limit = 1, window = 60)
     public ResponseEntity<String> approveClint(@Valid @RequestBody ApprovementReq approveReq){
@@ -82,7 +82,7 @@ public class AdminController {
         return new ResponseEntity<>(allClints,HttpStatus.OK);
     }
 
-    @PatchMapping("/blockClient")
+    @PatchMapping("/client/block")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @RateLimit(limit = 1, window = 60)
     public ResponseEntity<?> blockClient(@RequestParam String email){
@@ -97,7 +97,7 @@ public class AdminController {
         return new ResponseEntity<>(allAdmins,HttpStatus.OK);
     }
 
-    @PatchMapping("/approve-admin")
+    @PatchMapping("/admin/approve")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @RateLimit(limit = 1, window = 60*10)
     public ResponseEntity<String> approveAdmin(@Valid @RequestBody ApprovementReq approveReq){
@@ -112,6 +112,4 @@ public class AdminController {
         if(allUsers.isEmpty()) return new ResponseEntity<>("Users not found",HttpStatus.NOT_FOUND);
         return new ResponseEntity<>(allUsers,HttpStatus.OK);
     }
-
-
 }

@@ -51,22 +51,24 @@ public class AdminService {
        this.clientAcRepo = clientAcRepo;
    }
 
-    public ResponseEntity<?> addAdmin(AdminRegDTO adminRegDTO) {
+    private static final String SERVER_FAILED = "Something went wrong!";
+    private static final String EMAIL_NOT_FOUND = "Email not found!";
 
-        if(adminRepo.existsByEmail(adminRegDTO.getEmail())) return new ResponseEntity<>("Admin Already Exist",HttpStatus.ALREADY_REPORTED);
-        Admin admin = new Admin(adminRegDTO.getName(),adminRegDTO.getEmail(),adminRegDTO.getMobile(),passwordEncoder.encode(adminRegDTO.getPassword()));
-        admin.setActive(false);
+    public ResponseEntity<?> signup(AdminRegDTO adminRegDTO) {
         try{
+            if(adminRepo.existsByEmail(adminRegDTO.getEmail())) return new ResponseEntity<>("Admin Already Exist",HttpStatus.ALREADY_REPORTED);
+            Admin admin = new Admin(adminRegDTO.getName(),adminRegDTO.getEmail(),adminRegDTO.getMobile(),passwordEncoder.encode(adminRegDTO.getPassword()));
+            admin.setActive(false);
             OTPServices.sendOTP(adminRegDTO.getEmail());
         adminRepo.save(admin);
         }catch (Exception e){
-            return new ResponseEntity<>("Email,Mobile, can't be repe",HttpStatus.INTERNAL_SERVER_ERROR);
+            log.error("error Admin Signup {}",e.getMessage());
+            return new ResponseEntity<>("Email,Mobile, can't be null",HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return new ResponseEntity<>("An OTP sent to your email",HttpStatus.OK);
     }
 
     public ResponseEntity<?> verifyOTP(String email,String otp){
-
        try{
            Admin admin = adminRepo.findByEmail(email);
            if(admin != null){
@@ -82,45 +84,59 @@ public class AdminService {
                return new ResponseEntity<>("Email not found",HttpStatus.NOT_FOUND);
            }
        }catch (Exception e){
-           log.error("Error Verifying Admin OTP");
+           log.error("Error Verifying Admin OTP {}",e.getMessage());
        }
-       return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+       return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public ResponseEntity<?> resandOTP(String email){
-       if(adminRepo.existsByEmail(email)){
-           Map<String,String> sendOTP = OTPServices.sendOTP(email);
-           if (sendOTP.get("status").equals("true")){
-               return new ResponseEntity<>("OTP Sent to your email",HttpStatus.OK);
-           }else {
-               return new ResponseEntity<>(sendOTP.get("msg"),HttpStatus.BAD_REQUEST);
-           }
-       }
-       return new ResponseEntity<>("Email not found",HttpStatus.NOT_FOUND);
+        try {
+            if(adminRepo.existsByEmail(email)){
+                Map<String,String> sendOTP = OTPServices.sendOTP(email);
+                if (sendOTP.get("status").equals("true")){
+                    return new ResponseEntity<>("OTP Sent to your email",HttpStatus.OK);
+                }else {
+                    return new ResponseEntity<>(sendOTP.get("msg"),HttpStatus.BAD_REQUEST);
+                }
+            }
+        }catch (Exception e){
+            log.error("Error Admin sanding again OTP {}",e.getMessage());
+            return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+       return new ResponseEntity<>(EMAIL_NOT_FOUND,HttpStatus.NOT_FOUND);
     }
 
     public ResponseEntity<?> login(AdminLoginDTO loginDTO) {
-        if(!adminRepo.existsByEmail(loginDTO.getEmail())) return new ResponseEntity<>("Email not found",HttpStatus.NOT_FOUND);
-        Admin admin = adminRepo.findByEmail(loginDTO.getEmail());
-        if(!admin.isActive()) return new ResponseEntity<>("Please Approve By Admin then login",HttpStatus.BAD_REQUEST);
-        if(passwordEncoder.matches(loginDTO.getPassword(),admin.getPassword())){
-            Map<String,String> response = new HashMap<>();
-            response.put("token",jwtUtils.generateToken(admin.getEmail(),"ADMIN"));
-            return new ResponseEntity<>(response,HttpStatus.OK);
+        try{
+            if(!adminRepo.existsByEmail(loginDTO.getEmail())) return new ResponseEntity<>("Email not found",HttpStatus.NOT_FOUND);
+            Admin admin = adminRepo.findByEmail(loginDTO.getEmail());
+            if(!admin.isActive()) return new ResponseEntity<>("Please Approve By Admin then login",HttpStatus.BAD_REQUEST);
+            if(passwordEncoder.matches(loginDTO.getPassword(),admin.getPassword())){
+                Map<String,String> response = new HashMap<>();
+                response.put("token",jwtUtils.generateToken(admin.getEmail(),"ADMIN"));
+                return new ResponseEntity<>(response,HttpStatus.OK);
+            }
+        }catch (Exception e){
+            log.error("error Admin Authentication {}",e.getMessage());
         }
-        return new ResponseEntity<>("Something wont wrong or Invalid data",HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(SERVER_FAILED+" Invalid Data",HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     public ResponseEntity<?> forgetPassword(String email){
-       if(adminRepo.existsByEmail(email)){
-           Map<String,String> response = OTPServices.sendOTP(email);
-           if(response.get("status").equals("true")) {
-               return new ResponseEntity<>("And Verification Code Sent to your email",HttpStatus.OK);
-           }else{
-               return new ResponseEntity<>(response.get("msg"),HttpStatus.BAD_REQUEST);
-           }
-       }
-       return new ResponseEntity<>("Email not found ",HttpStatus.NOT_FOUND);
+        try{
+            if(adminRepo.existsByEmail(email)){
+                Map<String,String> response = OTPServices.sendOTP(email);
+                if(response.get("status").equals("true")) {
+                    return new ResponseEntity<>("And Verification Code Sent to your email",HttpStatus.OK);
+                }else{
+                    return new ResponseEntity<>(response.get("msg"),HttpStatus.BAD_REQUEST);
+                }
+            }
+        }catch (Exception e){
+            log.error("Error Admin forget password {}",e.getMessage());
+            return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+       return new ResponseEntity<>(EMAIL_NOT_FOUND,HttpStatus.NOT_FOUND);
     }
 
     public ResponseEntity<?> newPassword(String email,String newPassword,String otp){
@@ -138,26 +154,31 @@ public class AdminService {
                }
            }
        }catch (Exception e){
-           log.error("Error When changing admin password");
+           log.error("Error When changing admin password {}",e.getMessage());
        }
-       return new ResponseEntity<>("Something went wrong",HttpStatus.INTERNAL_SERVER_ERROR);
+       return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
    }
 
     @Cacheable(value = "allAdmins")
     public List<AdminProfile> getAllAdmins() {
-        List<Admin> allAdmins = adminRepo.findAll();
-        if(allAdmins.isEmpty()) return new ArrayList<>();
-        List<AdminProfile> adminProfiles = new ArrayList<>();
+        try {
+            List<Admin> allAdmins = adminRepo.findAll();
+            if(allAdmins.isEmpty()) return new ArrayList<>();
+            List<AdminProfile> adminProfiles = new ArrayList<>();
 
-        for (Admin admin:allAdmins) {
-            AdminProfile adminProfile = new AdminProfile();
-            adminProfile.setName(admin.getName());
-            adminProfile.setEmail(admin.getEmail());
-            adminProfile.setMobile(admin.getMobile());
-            adminProfile.setActive(admin.isActive());
-            adminProfiles.add(adminProfile);
+            for (Admin admin:allAdmins) {
+                AdminProfile adminProfile = new AdminProfile();
+                adminProfile.setName(admin.getName());
+                adminProfile.setEmail(admin.getEmail());
+                adminProfile.setMobile(admin.getMobile());
+                adminProfile.setActive(admin.isActive());
+                adminProfiles.add(adminProfile);
+            }
+            return adminProfiles;
+        }catch (Exception e){
+            log.error("Error Admin getting All Admins {}",e.getMessage());
         }
-        return adminProfiles;
+        return new ArrayList<>();
     }
 
 
@@ -177,20 +198,25 @@ public class AdminService {
                 return new ResponseEntity<>("Admin not found",HttpStatus.NOT_FOUND);
             }
         }catch (Exception e){
-            return new ResponseEntity<>("Internal Server error",HttpStatus.INTERNAL_SERVER_ERROR);
+            log.error("Error Admin Approval {}",e.getMessage());
+            return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
     public ResponseEntity<List<ClientProfileDTO>> pendingClients() {
-        List<Client> pendingClients = clientRepo.findByIsApprovedFalse();
-        if (pendingClients.isEmpty()) {
-            return new ResponseEntity<>(new ArrayList<>(), HttpStatus.OK);
+        try {
+            List<Client> pendingClients = clientRepo.findByIsApprovedFalse();
+            if (pendingClients.isEmpty()) {
+                return new ResponseEntity<>(new ArrayList<>(), HttpStatus.OK);
+            }
+            List<ClientProfileDTO> clientProfiles = pendingClients.stream()
+                    .map(client -> new ClientProfileDTO(client.getId(), client.getBusinessName(), client.getEmail(), client.getMobile(), client.getWebsiteUrl(), client.isApproved(),client.isEmailVerified()))
+                    .collect(Collectors.toList());
+
+            return new ResponseEntity<>(clientProfiles, HttpStatus.OK);
+        }catch (Exception e){
+            log.error("Error Admin finding pending clients {}",e.getMessage());
         }
-
-        List<ClientProfileDTO> clientProfiles = pendingClients.stream()
-                .map(client -> new ClientProfileDTO(client.getId(), client.getBusinessName(), client.getEmail(), client.getMobile(), client.getWebsiteUrl(), client.isApproved(),client.isEmailVerified()))
-                .collect(Collectors.toList());
-
-        return new ResponseEntity<>(clientProfiles, HttpStatus.OK);
+        return new ResponseEntity<>(new ArrayList<>(),HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @Transactional
@@ -200,7 +226,6 @@ public class AdminService {
             if (existingClient == null) {
                 return new ResponseEntity<>("CLIENT_NOT_FOUND", HttpStatus.NOT_FOUND);
             }
-
             if (approveReq.isApprove()) {
                 if (existingClient.getMobile() != null) {
                     if (!clientAcRepo.existsById(existingClient.getMobile())) {
@@ -227,35 +252,49 @@ public class AdminService {
     }
 
     public ResponseEntity<String> blockClient(String email) {
-        Client existingClient = clientRepo.findByEmail(email);
-        if (existingClient == null) {
-            return new ResponseEntity<>("CLIENT_NOT_FOUND", HttpStatus.NOT_FOUND);
+        try{
+            Client existingClient = clientRepo.findByEmail(email);
+            if (existingClient == null) {
+                return new ResponseEntity<>("CLIENT_NOT_FOUND", HttpStatus.NOT_FOUND);
+            }
+            existingClient.setApproved(false);
+            existingClient.setApiKey(UUID.randomUUID().toString());
+            clientRepo.save(existingClient);
+        }catch (Exception e){
+            log.error("Error Blocking Client {}",e.getMessage());
         }
-
-        existingClient.setApproved(false);
-        existingClient.setApiKey(UUID.randomUUID().toString());
-        clientRepo.save(existingClient);
-        return new ResponseEntity<>("Client account blocked", HttpStatus.OK);
+            return new ResponseEntity<>("Client account blocked", HttpStatus.OK);
     }
+
     @Cacheable(value = "clients")
     public List<ClientProfileDTO> getAllClients() {
-        List<Client> allClients = clientRepo.findByIsApprovedTrue();
-        if (allClients.isEmpty()) {
-            return new ArrayList<>();
+        try{
+            List<Client> allClients = clientRepo.findByIsApprovedTrue();
+            if (allClients.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<ClientProfileDTO> clientProfiles = allClients.stream()
+                    .map(client -> new ClientProfileDTO(client.getId(), client.getBusinessName(), client.getEmail(), client.getMobile(), client.getWebsiteUrl(), client.isApproved(),client.isEmailVerified()))
+                    .collect(Collectors.toList());
+            return clientProfiles;
+        }catch (Exception e){
+            log.error("Error Fetching All Clients {}",e.getMessage());
         }
-        List<ClientProfileDTO> clientProfiles = allClients.stream()
-                .map(client -> new ClientProfileDTO(client.getId(), client.getBusinessName(), client.getEmail(), client.getMobile(), client.getWebsiteUrl(), client.isApproved(),client.isEmailVerified()))
-                .collect(Collectors.toList());
-        return clientProfiles;
+        return new ArrayList<>();
     }
 
     @Cacheable(value = "allUsers")
     public List<UserUpdateDTO> getAllUsers() {
-        List<User> users = userRepo.findAll();
-        if(users.isEmpty()) return new ArrayList<>();
-        List<UserUpdateDTO> userUpdateDTOList = users.stream()
-                .map(user -> modelMapper.map(user, UserUpdateDTO.class))
-                .collect(Collectors.toList());
-        return userUpdateDTOList;
+        try{
+            List<User> users = userRepo.findAll();
+            if(users.isEmpty()) return new ArrayList<>();
+            List<UserUpdateDTO> userUpdateDTOList = users.stream()
+                    .map(user -> modelMapper.map(user, UserUpdateDTO.class))
+                    .collect(Collectors.toList());
+            return userUpdateDTOList;
+        }catch (Exception e){
+           log.error("Error Fetching all Users by Admin {}",e.getMessage());
+        }
+        return new ArrayList<>();
     }
 }

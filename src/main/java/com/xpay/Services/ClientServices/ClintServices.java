@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 public class ClintServices {
 
     private final ClientRepo clientRepo;
-    private final AdminRepo adminRepo;
     private final WalletRepo walletRepo;
     private final ClientACRepo clientACRepo;
     private final TransactionRepo transactionRepo;
@@ -42,9 +41,8 @@ public class ClintServices {
     private ModelMapper modelMapper;
 
     @Autowired
-    public ClintServices(ClientRepo clientRepo, AdminRepo adminRepo, WalletRepo walletRepo, ClientACRepo clientACRepo, TransactionRepo transactionRepo, CGSTransactionsRepo cgsTransactionsRepo) {
+    public ClintServices(ClientRepo clientRepo,WalletRepo walletRepo, ClientACRepo clientACRepo, TransactionRepo transactionRepo, CGSTransactionsRepo cgsTransactionsRepo) {
         this.clientRepo = clientRepo;
-        this.adminRepo = adminRepo;
         this.walletRepo = walletRepo;
         this.clientACRepo = clientACRepo;
         this.transactionRepo = transactionRepo;
@@ -54,7 +52,8 @@ public class ClintServices {
     // Constants for error messages
     private static final String CLIENT_ALREADY_EXISTS = "Client with this email already exists.";
     private static final String REGISTRATION_FAILED = "Something went wrong or Invalid data.";
-    private static final String CLIENT_NOT_FOUND = "Client not found.";
+    private static final String SERVER_FAILED = "Something went wrong!";
+    private static final String CLIENT_NOT_FOUND = "Client not found!";
 
     public ResponseEntity<String> register(ClientRegDTO regDTO){
         Client existingClient = clientRepo.findByEmail(regDTO.getEmail());
@@ -86,23 +85,27 @@ public class ClintServices {
     }
 
     public ResponseEntity<Map<String, String>> authenticate(ClientLoginDTO clientLoginDTO) {
-        Client client = clientRepo.findByEmail(clientLoginDTO.getEmail());
-        if (client == null) {
-            return new ResponseEntity<>(Collections.singletonMap("error", "Email not found"), HttpStatus.NOT_FOUND);
-        }
-
-        if (passwordEncoder.matches(clientLoginDTO.getPassword(), client.getPassword())) {
-            if (!client.isApproved()) {
-                return new ResponseEntity<>(Collections.singletonMap("error", "Account blocked by admin"), HttpStatus.NOT_ACCEPTABLE);
+        try{
+            Client client = clientRepo.findByEmail(clientLoginDTO.getEmail());
+            if (client == null) {
+                return new ResponseEntity<>(Collections.singletonMap("error", "Email not found"), HttpStatus.NOT_FOUND);
             }
+            if (passwordEncoder.matches(clientLoginDTO.getPassword(), client.getPassword())) {
+                if (!client.isApproved()) {
+                    return new ResponseEntity<>(Collections.singletonMap("error", "Account blocked by admin"), HttpStatus.NOT_ACCEPTABLE);
+                }
 
-            Map<String, String> response = new HashMap<>();
-            response.put("token", jwtUtils.generateToken(clientLoginDTO.getEmail(), "CLIENT"));
-            response.put("apiKey", client.getApiKey());
-            return new ResponseEntity<>(response, HttpStatus.OK);
+                Map<String, String> response = new HashMap<>();
+                response.put("token", jwtUtils.generateToken(clientLoginDTO.getEmail(), "CLIENT"));
+                response.put("apiKey", client.getApiKey());
+                return new ResponseEntity<>(response, HttpStatus.OK);
+            }
+        }catch (Exception e){
+            log.error("Error Client Authentication!");
+            return new ResponseEntity<>(Collections.singletonMap("error", SERVER_FAILED),HttpStatus.INTERNAL_SERVER_ERROR);
         }
+            return new ResponseEntity<>(Collections.singletonMap("error", "Invalid password"), HttpStatus.BAD_REQUEST);
 
-        return new ResponseEntity<>(Collections.singletonMap("error", "Invalid password"), HttpStatus.BAD_REQUEST);
     }
 
     public ResponseEntity<String> verifyUser(String userMobile, Boolean status) {
@@ -117,7 +120,7 @@ public class ClintServices {
             }
         }catch (Exception e){
             log.error("Error When Verifying User Wallet {} ",e.getMessage());
-          return new ResponseEntity<>("Something went wrong",HttpStatus.INTERNAL_SERVER_ERROR);
+          return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
     @Cacheable(value = "clientTransactions",key = "#username")
@@ -132,7 +135,7 @@ public class ClintServices {
                         .collect(Collectors.toList());
                 return allTransactions;
             }else{
-                throw new IllegalAccessException("Client not found");
+                throw new IllegalAccessException(CLIENT_NOT_FOUND);
             }
         }catch (Exception e){
             log.error("error fetching Client Transactions {}", e.getMessage());
@@ -157,7 +160,7 @@ public class ClintServices {
             }
         }catch (Exception e){
           log.error("Error verifying OTP {}",e.getMessage());
-          return new ResponseEntity<>("Something wrong",HttpStatus.INTERNAL_SERVER_ERROR);
+          return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -196,26 +199,30 @@ public class ClintServices {
                     return new ResponseEntity<>("Transaction not found",HttpStatus.NOT_FOUND);
                 }
             }else{
-                return new ResponseEntity<>("Client not found",HttpStatus.NOT_FOUND);
+                return new ResponseEntity<>(CLIENT_NOT_FOUND,HttpStatus.NOT_FOUND);
             }
         }catch (Exception e){
         log.error("Error during Refund {}",e.getMessage());
-        return new ResponseEntity<>("Internal Server Error",HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
     public ResponseEntity<?> forgetPassword(String email) {
-        Client client = clientRepo.findByEmail(email);
-        Map<String,String> response = new HashMap<>();
-        if(client != null){
-         response = OTPServices.sendOTP(email);
-         if(response.get("status").equals("true"))
-         return new ResponseEntity<>(response.get("msg"),HttpStatus.OK);
-         }
-        if(response.containsKey("msg")){
-            return new ResponseEntity<>(response.get("msg"),HttpStatus.BAD_REQUEST);
+        try{
+            Client client = clientRepo.findByEmail(email);
+            Map<String,String> response = new HashMap<>();
+            if(client != null){
+                response = OTPServices.sendOTP(email);
+                if(response.get("status").equals("true"))
+                    return new ResponseEntity<>(response.get("msg"),HttpStatus.OK);
+            }
+            if(response.containsKey("msg")){
+                return new ResponseEntity<>(response.get("msg"),HttpStatus.BAD_REQUEST);
+            }
+        }catch (Exception e){
+           log.error("Error Clint Forget Password!");
         }
-        return new ResponseEntity<>("Something went wrong ",HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
    }
 
 
@@ -239,7 +246,44 @@ public class ClintServices {
             }
         }catch (Exception e){
             log.error("Error otp client new password creation");
-            return new ResponseEntity<>("Something went wrong",HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public ResponseEntity<?> getById(String username) {
+        try{
+           Client client = clientRepo.findByEmail(username);
+           if(client != null){
+              ClientProfileDTO response = modelMapper.map(client,ClientProfileDTO.class);
+              return new ResponseEntity<>(response,HttpStatus.OK);
+           }
+        }catch (Exception e){
+            log.error("Error fetching client by email {}",e.getMessage());
+            return new ResponseEntity<>("Something went wrong!",HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return new ResponseEntity<>(CLIENT_NOT_FOUND,HttpStatus.NOT_FOUND);
+    }
+
+    public ResponseEntity<?> updateProfile(ClientProfileUpdate updateDTO, String username) {
+        try{
+            Client client = clientRepo.findByEmail(username);
+            if(client != null){
+                if(updateDTO.getEmail() != null && !updateDTO.getEmail().isEmpty()){
+                    if(updateDTO.getEmail().equals(username) || clientRepo.existsByEmail(updateDTO.getEmail())) return new ResponseEntity<>("Email Already exist!",HttpStatus.BAD_REQUEST);
+                    client.setEmail(updateDTO.getEmail());
+                    client.setEmailVerified(false);
+                }
+                if(updateDTO.getBusinessName() != null && !updateDTO.getBusinessName().isEmpty()) client.setBusinessName(updateDTO.getBusinessName());
+                if(updateDTO.getMobile() != null && !updateDTO.getMobile().isEmpty()) client.setMobile(updateDTO.getMobile());
+                if(updateDTO.getWebsiteUrl() != null && !updateDTO.getWebsiteUrl().isEmpty()) client.setWebsiteUrl(updateDTO.getWebsiteUrl());
+
+                clientRepo.save(client);
+                return new ResponseEntity<>("Profile Successfully Updated",HttpStatus.OK);
+            }
+        }catch (Exception e){
+            log.error("Error Updating Client Profile {}",e.getMessage());
+            return new ResponseEntity<>(SERVER_FAILED,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return new ResponseEntity<>(CLIENT_NOT_FOUND,HttpStatus.NOT_FOUND);
     }
 }
